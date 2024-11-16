@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import requests
+from PIL import Image
 from mutagen.flac import Picture
 from mutagen.id3 import PictureType
 from natsort import os_sort_key
-from PIL import Image
 from requests.adapters import HTTPAdapter, Retry
 
 _workno_pat = re.compile(r"(R|B|V)J\d{6}(\d\d)?", flags=re.IGNORECASE)
@@ -40,23 +40,26 @@ def _walk(basepath: Path):
             yield f
 
 
-def get_audio_paths_list(basepath: Path) -> Tuple[List[List[Path]], List[List[Path]], List[List[Path]]]:
+def get_audio_paths_list(basepath: Path) -> Tuple[
+    List[List[Path]], List[List[Path]], List[List[Path]], List[List[Path]]]:
     """Gets audio files(Path) from basepath recursively
 
     Args:
         basepath (Path): base path
 
     Returns:
-        Tuple[List[List[Path]], List[List[Path]], List[List[Path]]]: flac paths list, m4a paths list, mp3 paths list
+        Tuple[List[List[Path]], List[List[Path]], List[List[Path]], List[List[Path]]]: flac paths list, m4a paths list, mp3 paths list, wavpack paths list
     """
     flac_paths_list: List[List[Path]] = []
     m4a_paths_list: List[List[Path]] = []
     mp3_paths_list: List[List[Path]] = []
+    wavpack_paths_list: List[List[Path]] = []
 
     for files in _walk(basepath):
         flac_paths: List[Path] = []
         m4a_paths: List[Path] = []
         mp3_paths: List[Path] = []
+        wavpack_paths: List[Path] = []
         for file in files:
             if file.suffix.lower() == ".flac":
                 flac_paths.append(file)
@@ -64,6 +67,8 @@ def get_audio_paths_list(basepath: Path) -> Tuple[List[List[Path]], List[List[Pa
                 m4a_paths.append(file)
             elif file.suffix.lower() == ".mp3":
                 mp3_paths.append(file)
+            elif file.suffix.lower() == ".wv":
+                wavpack_paths.append(file)
 
         if len(flac_paths):
             flac_paths_list.append(flac_paths)
@@ -71,8 +76,10 @@ def get_audio_paths_list(basepath: Path) -> Tuple[List[List[Path]], List[List[Pa
             m4a_paths_list.append(m4a_paths)
         if len(mp3_paths):
             mp3_paths_list.append(mp3_paths)
+        if len(wavpack_paths):
+            wavpack_paths_list.append(wavpack_paths)
 
-    return flac_paths_list, m4a_paths_list, mp3_paths_list
+    return flac_paths_list, m4a_paths_list, mp3_paths_list, wavpack_paths_list
 
 
 def get_workno(name: str) -> Optional[str]:

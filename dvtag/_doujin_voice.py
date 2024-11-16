@@ -2,7 +2,6 @@ __all__ = [
     "DoujinVoice",
 ]
 
-
 from dataclasses import dataclass
 
 

@@ -2,17 +2,17 @@ __all__ = [
     "tag",
 ]
 
-
 import logging
 from io import BytesIO
 from pathlib import Path
 from typing import List, Optional
 
+from PIL.Image import Image
+from mutagen.apev2 import APEv2, APEValue, APENoHeaderError, TEXT, BINARY
 from mutagen.flac import FLAC
 from mutagen.id3 import APIC, ID3, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TPOS, TRCK, ID3NoHeaderError
 from mutagen.mp4 import MP4, MP4Cover
 from natsort import os_sorted
-from PIL.Image import Image
 
 from ._doujin_voice import DoujinVoice
 from ._scrape import ParsingError, scrape
@@ -104,9 +104,46 @@ def tag_flacs(files: List[Path], dv: DoujinVoice, image: Image, png_bytes_arr: B
             logging.info(f"Tagged <track: {trck}, disc: {disc}>, title: '{title}'>  to '{p.name}'")
 
 
+def tag_wavpacks(files: List[Path], dv: DoujinVoice, png_bytes_arr: BytesIO, disc: Optional[int]):
+    sorted = list(os_sorted(files))
+    titles = extract_titles(sorted_stems=[f.stem for f in sorted])
+
+    for trck, title, p in zip(range(1, len(sorted) + 1), titles, sorted):
+        ape_available = True
+        try:
+            tags = APEv2(p)
+        except APENoHeaderError:
+            ape_available = False
+            tags = APEv2()
+            tags.save(p)
+        tags.clear()
+
+        tags['Album'] = APEValue(dv.name, TEXT)
+        tags['Album Artist'] = APEValue(dv.circle, TEXT)
+        tags['Year'] = APEValue(dv.sale_date, TEXT)
+        tags['Title'] = APEValue(title, TEXT)
+        tags['Track'] = APEValue(str(trck), TEXT)
+
+        if dv.genres:
+            tags['Genre'] = APEValue(';'.join(dv.genres), TEXT)
+        if dv.seiyus:
+            tags['Artist'] = APEValue(';'.join(dv.seiyus), TEXT)
+        if disc:
+            tags['Disc'] = APEValue(str(disc), TEXT)
+
+        cover_filename = 'Cover (front).png'
+        png_bytes_arr.seek(0)
+        cover_data = png_bytes_arr.read()
+        tags['comment'] = APEValue(cover_filename.encode('ascii') + b'\0' + cover_data, BINARY)
+
+        if not ape_available or (ape_available and tags != APEv2(p)):
+            tags.save(p)
+            logging.info(f"Tagged <track: {trck}, disc: {disc}, title: '{title}'>  to '{p.name}'")
+
+
 def tag(basepath: Path, workno: str):
-    flac_paths_list, m4a_paths_list, mp3_paths_list = get_audio_paths_list(basepath)
-    if not flac_paths_list and not m4a_paths_list and not mp3_paths_list:
+    flac_paths_list, m4a_paths_list, mp3_paths_list, wavpack_paths_list = get_audio_paths_list(basepath)
+    if not flac_paths_list and not m4a_paths_list and not mp3_paths_list and not wavpack_paths_list:
         return
 
     try:
@@ -128,7 +165,7 @@ def tag(basepath: Path, workno: str):
     png_bytes_arr = get_png_byte_arr(image)
 
     disc = None
-    if len(flac_paths_list) + len(m4a_paths_list) + len(mp3_paths_list) > 1:
+    if len(flac_paths_list) + len(m4a_paths_list) + len(mp3_paths_list) + len(wavpack_paths_list) > 1:
         disc = 1
 
     for flac_files in flac_paths_list:
@@ -143,6 +180,11 @@ def tag(basepath: Path, workno: str):
 
     for mp3_files in mp3_paths_list:
         tag_mp3s(mp3_files, dv, png_bytes_arr, disc)
+        if disc:
+            disc += 1
+
+    for wavpack_files in wavpack_paths_list:
+        tag_wavpacks(wavpack_files, dv, png_bytes_arr, disc)
         if disc:
             disc += 1
 

@@ -3,7 +3,6 @@ __all__ = [
     "scrape",
 ]
 
-
 import json
 import re
 from html import unescape
